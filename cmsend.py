@@ -25,13 +25,17 @@ def main():
         help="setup a chat using the specified invite link",
     )
     parser.add_argument(
-        "--msg",
+        "-m",
         type=str,
+        dest="msg",
         default=None,
         help="the text message to send (defaults to reading from stdin)",
     )
     parser.add_argument(
         "-v", dest="verbose", action="count", default=0, help="increase verbosity"
+    )
+    parser.add_argument(
+        "-a", dest="filename", type=str, default=None, help="add file attachment"
     )
     args = parser.parse_args()
 
@@ -54,7 +58,7 @@ def perform_main(args):
         else:
             if args.msg is None:
                 args.msg = sys.stdin.read()
-            profile.perform_send(args.msg)
+            profile.perform_send(args.msg, filename=args.filename)
 
 
 class Profile:
@@ -110,12 +114,12 @@ class Profile:
         print(f"joining completed with contact_id == {ev.contact_id}")
         return 0
 
-    def perform_send(self, text):
+    def perform_send(self, text, filename=None):
         self._account.start_io()
         for chat in self._account.get_chatlist():
             snap = chat.get_full_snapshot()
             if snap.is_encrypted and snap.can_send:
-                msg = chat.send_text(text)
+                msg = chat.send_message(text=text, file=filename)
                 print(f"message {msg.id} was queued, waiting for delivery")
                 msg.wait_until_delivered()
                 return 0
