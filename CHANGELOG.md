@@ -1,6 +1,10 @@
 
 # cmsend changelog 
 
+## 0.4.1 
+
+- add warning 
+
 ## 0.4.0 tagged chats
 
 - added "-t" tagged chats option, so that "--join" can be accompanied by "-t"

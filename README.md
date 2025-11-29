@@ -1,4 +1,6 @@
-# cmsend: chatmail sendmail tool for end-to-end encrypted messages  
+# cmsend: chatmail sendmail tool for end-to-end encrypted messages 
+
+**WORK IN PROGRESS: this is more an explorative study for now**
 
 To install use: 
 
