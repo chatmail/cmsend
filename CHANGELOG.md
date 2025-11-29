@@ -1,6 +1,10 @@
 
 # cmsend changelog 
 
+## 0.3.1
+
+- fixed README
+
 ## 0.3.0
 
 - added more options 
