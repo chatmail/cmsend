@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "setuptools-git-versioning >=2.0,<3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cmsend"
+readme = "README.md"
+description = "ping messages between chatmail relays"
+dependencies = [
+  "deltachat-rpc-server>=2.24.0",
+  "deltachat-rpc-client>=2.24.0",
+  "xdg-base-dirs>=6.0.2", 
+]
+
+dynamic = ["version"]
+
+[tool.setuptools-git-versioning]
+enabled = true
+
+[tool.setuptools]
+py-modules = ["cmsend"]
+
+
+[project.urls]
+Repository = "https://github.com/chatmail/cmsend"
+Changelog = "https://github.com/chatmail/cmsend/blob/master/CHANGELOG.md"
+
+[project.scripts]
+cmsend = "cmsend:main"
+
+[tool.pytest.ini_options]
+addopts = "-v -ra --strict-markers"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+
+[tool.ruff]
+lint.select = [
+  "F", # Pyflakes
+  "I", # isort
+
+  "PLC", # Pylint Convention
+  "PLE", # Pylint Error
+  "PLW", # Pylint Warning
+]
+lint.ignore = [
+  "PLC0415" # import-outside-top-level
+]
