@@ -1,6 +1,10 @@
 
 # cmsend changelog 
 
+## 0.4.2
+
+- improve output on "cmsend -l" to show members of each chat 
+
 ## 0.4.1 
 
 - add warning 

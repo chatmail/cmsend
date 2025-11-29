@@ -161,6 +161,8 @@ class Profile:
             chat = self.get_tagged_chat(tag)
             snap = chat.get_full_snapshot()
             print(f"{tag}: chat_id={chat.id} name={snap.name}")
+            for contact in snap.contacts:
+                print(f"   - {contact.name_and_addr}")
 
     def perform_send(self, tag, text, filename=None):
         self._account.start_io()
