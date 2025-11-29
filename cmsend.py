@@ -17,10 +17,12 @@ def main():
     parser.add_argument(
         "--init",
         type=str,
+        dest="relay",
         help="initialize a profile with the specified chatmail relay",
     )
     parser.add_argument(
         "--join",
+        dest="invitelink",
         type=str,
         help="setup a chat using the specified invite link",
     )
@@ -51,11 +53,15 @@ def perform_main(args):
     with Rpc(accounts_dir=accounts_dir) as rpc:
         dc = DeltaChat(rpc)
         profile = Profile(dc, verbosity=args.verbose)
-        if args.init:
-            profile.perform_init(domain=args.init)
-        elif args.join:
-            profile.perform_join(invitelink=args.join)
+        if args.relay:
+            profile.perform_init(domain=args.relay)
+        elif args.invitelink:
+            profile.perform_join(invitelink=args.invitelink)
         else:
+            if not profile._account:
+                print("profile is not configured, run --init")
+                raise SystemExit(2)
+
             if args.msg is None:
                 args.msg = sys.stdin.read()
             profile.perform_send(args.msg, filename=args.filename)
@@ -123,7 +129,7 @@ class Profile:
                 print(f"message {msg.id} was queued, waiting for delivery")
                 msg.wait_until_delivered()
                 return 0
-        print(f"No chat usable for sending on {self!r}")
+        print("No chat usable for sending on {self!r}, use --join 'https://i.delta.chat/...'")
         raise SystemExit(5)
 
     def wait_for_event(self, check_event=lambda ev: None):

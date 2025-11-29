@@ -10,7 +10,7 @@ To send and receive from a single chatmail relay:
 
 To setup a genesis chat using an invite link: 
 
-    cmsend --join INVITELINK 
+    cmsend --join "INVITELINK"       # <-- quotes are neccessary because links contain "&"
 
 To send a message to the genesis chat: 
 
