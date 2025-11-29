@@ -1,6 +1,13 @@
 
 # cmsend changelog 
 
+## 0.4.0 tagged chats
+
+- added "-t" tagged chats option, so that "--join" can be accompanied by "-t"
+
+- added "cmsend -l" to list all tagged chats 
+
+
 ## 0.3.2
 
 - fixed README

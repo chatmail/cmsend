@@ -8,17 +8,21 @@ To send and receive from a single chatmail relay:
 
     cmsend --init nine.testrun.org   # <-- substitute with the domain you want to set as origin 
 
-To setup a genesis chat using an invite link: 
+To setup a tagged chat using an invite link: 
 
-    cmsend --join "INVITELINK"       # <-- quotes are neccessary because links contain "&"
+    cmsend -t LOG --join "INVITELINK"       # <-- quotes are neccessary because links contain "&"
 
-To send a message to the genesis chat: 
+To send a message to a tagged chat: 
 
-    echo "hello" | cmsend 
+    echo "hello" | cmsend -t LOG 
 
-To send a message to the genesis chat with an attachment: 
+To list all chats with tags: 
 
-    cmsend -m "here is the file" -a README.md
+    cmsend -l 
+
+To send a message to a tagged chat with an attachment: 
+
+    cmsend -t LOG -m "here is the file" -a README.md
 
 To show help:
 

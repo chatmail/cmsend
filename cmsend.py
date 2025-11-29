@@ -27,6 +27,19 @@ def main():
         help="setup a chat using the specified invite link",
     )
     parser.add_argument(
+        "-t",
+        type=str,
+        dest="tag",
+        default="GENESIS",
+        help="use the specified tag for joining a chat or sending a message (default: GENESIS)",
+    )
+    parser.add_argument(
+        "-l",
+        dest="listtags",
+        action="store_true",
+        help="list existing tagged chats"
+    )
+    parser.add_argument(
         "-m",
         type=str,
         dest="msg",
@@ -49,14 +62,18 @@ def main():
 
 def perform_main(args):
     accounts_dir = xdg_config_home().joinpath("cmsend")
-    print(f"# using accounts_dir at: {accounts_dir}")
+    if args.verbose >= 1:
+        print(f"# using accounts_dir at: {accounts_dir}")
     with Rpc(accounts_dir=accounts_dir) as rpc:
         dc = DeltaChat(rpc)
         profile = Profile(dc, verbosity=args.verbose)
+
         if args.relay:
             profile.perform_init(domain=args.relay)
         elif args.invitelink:
-            profile.perform_join(invitelink=args.invitelink)
+            profile.perform_join(tag=args.tag, invitelink=args.invitelink)
+        elif args.listtags:
+            profile.perform_listtags()
         else:
             if not profile._account:
                 print("profile is not configured, run --init")
@@ -64,11 +81,12 @@ def perform_main(args):
 
             if args.msg is None:
                 args.msg = sys.stdin.read()
-            profile.perform_send(args.msg, filename=args.filename)
+            profile.perform_send(text=args.msg, filename=args.filename, tag=args.tag)
 
 
 class Profile:
     _account = None
+    UI_CONFIG_TAGGED_CHATS = "ui.cmsend.tagged_chats"
 
     def __init__(self, dc, verbosity=0):
         self.dc = dc
@@ -77,12 +95,20 @@ class Profile:
             addr = account.get_config("configured_addr")
             if addr is not None:
                 self._account = account
-                print(f"profile {self!r} is active")
+                self.verbose1(f"profile {self!r} is active")
 
     def __repr__(self):
         if self._account:
             return f"Profile<{self._account.get_config('configured_addr')}>"
         return "Profile<unconfigured>"
+
+    def verbose1(self, msg):
+        if self.verbosity >= 1:
+            print(msg)
+
+    def verbose2(self, msg):
+        if self.verbosity >= 2:
+            print(msg)
 
     def perform_init(self, domain):
         if self._account:
@@ -93,12 +119,13 @@ class Profile:
         account.set_config_from_qr(f"dcaccount:{domain}")
         account.start_io()
         account.wait_for_event(EventType.IMAP_INBOX_IDLE)
-        print(f"profile {self!r} is configured and active now")
+        self.verbose1(f"profile {self!r} is configured and active now")
 
-    def perform_join(self, invitelink):
+    def perform_join(self, tag, invitelink):
         if self._account is None:
             print("you must first call --init to setup a profile", file=sys.stderr)
             raise SystemExit(4)
+
         self._account.start_io()
         self._account.secure_join(invitelink)
 
@@ -112,33 +139,55 @@ class Profile:
         ev = self.wait_for_event(check_joined)
         print(f"established contact with contact_id == {ev.contact_id}")
 
-        def idle_entering_remote(event):
-            if event.kind == EventType.INFO and "IDLE entering wait" in event.msg:
-                return event
+        def me_was_added(event):
+            if event.kind == EventType.INCOMING_MSG:
+                msg = self._account.get_message_by_id(event.msg_id)
+                text = msg.get_snapshot().text
+                if text.startswith("Member Me added"):
+                    return True
 
-        self.wait_for_event(idle_entering_remote)
-        print(f"joining completed with contact_id == {ev.contact_id}")
-        return 0
+        ev_chat_id = self.wait_for_event(me_was_added)
+        chat_id = ev_chat_id.chat_id
+        print(f"joining completed with chat_id == {chat_id} tag={tag}")
+        self._account.set_config(f"{self.UI_CONFIG_TAGGED_CHATS}.{tag}", str(chat_id))
+        list_tags = self._account.get_config(self.UI_CONFIG_TAGGED_CHATS) or ""
+        tags = set(list_tags.split(","))
+        tags.add(tag)
+        self._account.set_config(self.UI_CONFIG_TAGGED_CHATS, ",".join(tags))
 
-    def perform_send(self, text, filename=None):
-        self._account.start_io()
-        for chat in self._account.get_chatlist():
+    def perform_listtags(self):
+        list_tags = self._account.get_config(self.UI_CONFIG_TAGGED_CHATS) or ""
+        for tag in filter(None, list_tags.split(",")):
+            chat = self.get_tagged_chat(tag)
             snap = chat.get_full_snapshot()
-            if snap.is_encrypted and snap.can_send:
-                msg = chat.send_message(text=text, file=filename)
-                print(f"message {msg.id} was queued, waiting for delivery")
-                msg.wait_until_delivered()
-                return 0
-        print("No chat usable for sending on {self!r}, use --join 'https://i.delta.chat/...'")
+            print(f"{tag}: chat_id={chat.id} name={snap.name}")
+
+    def perform_send(self, tag, text, filename=None):
+        self._account.start_io()
+
+        chat = self.get_tagged_chat(tag)
+        snap = chat.get_full_snapshot()
+        if snap.is_encrypted and snap.can_send:
+            msg = chat.send_message(text=text, file=filename)
+            print(f"message {msg.id} was queued, waiting for delivery")
+            msg.wait_until_delivered()
+            return 0
         raise SystemExit(5)
+
+    def get_tagged_chat(self, tag):
+        chat_id = self._account.get_config(f"{self.UI_CONFIG_TAGGED_CHATS}.{tag}")
+        if not chat_id:
+            print(f"No chat tagged with tag={tag} found for sending on {self!r}, "
+                  f"use -t {tag} --join 'https://i.delta.chat/...'")
+            raise SystemExit(5)
+
+        return self._account.get_chat_by_id(int(chat_id))
 
     def wait_for_event(self, check_event=lambda ev: None):
         account = self._account
         start_clock = time.time()
 
-        def log(msg):
-            if self.verbosity > 0:
-                print(msg)
+        log = self.verbose2
 
         while event := account.wait_for_event():
             if event.kind == EventType.INCOMING_MSG:
