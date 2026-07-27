@@ -5,7 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cmsend"
 readme = "README.md"
-description = "ping messages between chatmail relays"
+description = "send end-to-end encrypted messages to chats on chatmail relays"
+requires-python = ">=3.11"
 dependencies = [
   "deltachat-rpc-server>=2.24.0",
   "deltachat-rpc-client>=2.24.0",
@@ -23,17 +24,22 @@ py-modules = ["cmsend"]
 
 [project.urls]
 Repository = "https://github.com/chatmail/cmsend"
-Changelog = "https://github.com/chatmail/cmsend/blob/master/CHANGELOG.md"
+Changelog = "https://github.com/chatmail/cmsend/blob/main/CHANGELOG.md"
 
 [project.scripts]
 cmsend = "cmsend:main"
 
+[dependency-groups]
+test = [
+  "pytest",
+  "pytest-timeout",
+  "execnet", # imported by the deltachat_rpc_client pytest plugin
+]
+
 [tool.pytest.ini_options]
 addopts = "-v -ra --strict-markers"
-
-[tool.setuptools.packages.find]
-where = ["."]
-
+# cmsend waits for core events without a deadline of its own.
+timeout = 180
 
 [tool.ruff]
 lint.select = [
