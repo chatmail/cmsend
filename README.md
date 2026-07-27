@@ -4,7 +4,7 @@
 
 To install use:
 
-    pip install cmsend
+    uv tool install cmsend
 
 To send and receive from a single chatmail relay:
 
@@ -31,21 +31,22 @@ To show help:
     cmsend -h
 
 
-## Example outputs
-
-
 ## Developing / Releasing cmsend
 
 1. clone the git repository at https://github.com/chatmail/cmsend
 
-2. install 'cmsend" in editing mode: `pip install -e .`
+2. install 'cmsend' in editing mode: `uv pip install -e .`
 
 3. edit cmsend.py and test, finally commit your changes
 
-4. set a new git-tag
+[chatmail/workflows](https://github.com/chatmail/workflows)
+defines py-checks for this repository.
+Run checks locally with `uvx ruff check .` and `uvx ruff format --check .`
 
-5. install build/release tools: `pip install build twine`
+To release, update CHANGELOG.md, then create and push a version tag:
 
-6. run the following command:
+    git tag -a v0.5.0 -m "Release v0.5.0"
+    git push origin main v0.5.0
 
-        rm -rf dist && python -m build && twine upload -r pypi dist/cmsend*
+The release.yml workflow then builds and publishes to PyPI via
+trusted publishing (OIDC); no local twine or PyPI token is involved.

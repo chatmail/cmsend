@@ -10,7 +10,7 @@ from deltachat_rpc_client import DeltaChat, EventType, Rpc
 from xdg_base_dirs import xdg_config_home
 
 
-def main():
+def main(argv=None):
     """Send end-to-end encrypted messages to groups/contacts."""
 
     parser = argparse.ArgumentParser(description=main.__doc__)
@@ -34,10 +34,7 @@ def main():
         help="use the specified tag for joining a chat or sending a message (default: GENESIS)",
     )
     parser.add_argument(
-        "-l",
-        dest="listtags",
-        action="store_true",
-        help="list existing tagged chats"
+        "-l", dest="listtags", action="store_true", help="list existing tagged chats"
     )
     parser.add_argument(
         "-m",
@@ -52,7 +49,7 @@ def main():
     parser.add_argument(
         "-a", dest="filename", type=str, default=None, help="add file attachment"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         return perform_main(args)
@@ -161,8 +158,8 @@ class Profile:
             chat = self.get_tagged_chat(tag)
             snap = chat.get_full_snapshot()
             print(f"{tag}: chat_id={chat.id} name={snap.name}")
-            for contact in snap.contacts:
-                print(f"   - {contact.name_and_addr}")
+            for contact in chat.get_contacts():
+                print(f"   - {contact.get_snapshot().name_and_addr}")
 
     def perform_send(self, tag, text, filename=None):
         self._account.start_io()
@@ -179,8 +176,10 @@ class Profile:
     def get_tagged_chat(self, tag):
         chat_id = self._account.get_config(f"{self.UI_CONFIG_TAGGED_CHATS}.{tag}")
         if not chat_id:
-            print(f"No chat tagged with tag={tag} found for sending on {self!r}, "
-                  f"use -t {tag} --join 'https://i.delta.chat/...'")
+            print(
+                f"No chat tagged with tag={tag} found for sending on {self!r}, "
+                f"use -t {tag} --join 'https://i.delta.chat/...'"
+            )
             raise SystemExit(5)
 
         return self._account.get_chat_by_id(int(chat_id))
