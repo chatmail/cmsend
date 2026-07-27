@@ -1,34 +1,34 @@
-# cmsend: chatmail sendmail tool for end-to-end encrypted messages 
+# cmsend: chatmail sendmail tool for end-to-end encrypted messages
 
 **WORK IN PROGRESS: this is more an explorative study for now**
 
-To install use: 
+To install use:
 
-    pip install cmsend 
+    pip install cmsend
 
-To send and receive from a single chatmail relay: 
+To send and receive from a single chatmail relay:
 
-    cmsend --init nine.testrun.org   # <-- substitute with the domain you want to set as origin 
+    cmsend --init nine.testrun.org   # <-- substitute with the domain you want to set as origin
 
-To setup a tagged chat using an invite link: 
+To setup a tagged chat using an invite link:
 
     cmsend -t LOG --join "INVITELINK"       # <-- quotes are neccessary because links contain "&"
 
-To send a message to a tagged chat: 
+To send a message to a tagged chat:
 
-    echo "hello" | cmsend -t LOG 
+    echo "hello" | cmsend -t LOG
 
-To list all chats with tags: 
+To list all chats with tags:
 
-    cmsend -l 
+    cmsend -l
 
-To send a message to a tagged chat with an attachment: 
+To send a message to a tagged chat with an attachment:
 
     cmsend -t LOG -m "here is the file" -a README.md
 
 To show help:
 
-    cmsend -h 
+    cmsend -h
 
 
 ## Example outputs
@@ -36,16 +36,16 @@ To show help:
 
 ## Developing / Releasing cmsend
 
-1. clone the git repository at https://github.com/chatmail/cmsend 
+1. clone the git repository at https://github.com/chatmail/cmsend
 
 2. install 'cmsend" in editing mode: `pip install -e .`
 
 3. edit cmsend.py and test, finally commit your changes
 
-4. set a new git-tag 
+4. set a new git-tag
 
 5. install build/release tools: `pip install build twine`
 
-6. run the following command: 
+6. run the following command:
 
         rm -rf dist && python -m build && twine upload -r pypi dist/cmsend*
