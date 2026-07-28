@@ -1,4 +1,9 @@
 
+## [0.5.0] - 2026-07-28
+
+- use newer deltachat-rpc version (2.57).
+
+
 ## [0.4.4] - 2026-07-28
 
 - support setup-contact as well as group invite links.
