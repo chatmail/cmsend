@@ -1,4 +1,9 @@
-## unreleased
+
+## [0.4.4] - 2026-07-28
+
+- support setup-contact as well as group invite links.
+
+- adapt to chatmail/workflows release standards.
 
 - adopt shared CI from chatmail/workflows (ruff lint+format, build)
   and release via PyPI trusted publishing on v* tags
