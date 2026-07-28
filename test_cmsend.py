@@ -1,50 +1,56 @@
-import pytest
+import subprocess
+import sys
 
-import cmsend
+import pytest
 
 pytest_plugins = ("deltachat_rpc_client.pytestplugin",)
 ci_chatmail_domain = "ci-chatmail.testrun.org"
 
 
 @pytest.fixture(autouse=True)
-def _inject_xdg_config_home(tmp_path, monkeypatch):
-    xdg_config = tmp_path.joinpath("xdg-config")
-    monkeypatch.setattr(cmsend, "xdg_config_home", lambda: xdg_config)
+def _isolate_env(tmp_path, monkeypatch):
+    """Keep every test off the real ~/.config/cmsend, however it invokes cmsend."""
     monkeypatch.setenv("CHATMAIL_DOMAIN", ci_chatmail_domain)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path.joinpath("xdg-config")))
 
 
 @pytest.fixture
-def invoke_main(capsys):
-    def invoke(*args):
-        with capsys.disabled():
-            print(f"$ cmsend {' '.join(args)}")
-        ret = cmsend.main(args)
-        out, err = capsys.readouterr()
-        with capsys.disabled():
-            if out:
-                print(out)
-        return ret, out, err
+def run_cmsend(capfd):
+    """Run cmsend as a subprocess: an in-process hang would wedge pytest itself."""
 
-    return invoke
+    def run(*args, timeout=60):
+        cmd = [sys.executable, "-m", "cmsend", *args]
+        try:
+            subprocess.run(cmd, check=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"cmsend did not terminate within {timeout}s")
+        return capfd.readouterr().out
+
+    return run
 
 
-def test_init_join_and_send(acfactory, invoke_main):
+@pytest.mark.parametrize("invite", ["setup", "group"])
+def test_init_join_and_send(acfactory, run_cmsend, invite):
     (ac,) = acfactory.get_online_accounts(1)
 
-    invoke_main("--init", ci_chatmail_domain)
+    run_cmsend("--init", ci_chatmail_domain, timeout=120)
 
-    _ret, out, _err = invoke_main("-l")
-    assert "LOG" not in out
+    assert "LOG" not in run_cmsend("-l")
 
-    # "--join" expects a Join-Group QR code, not a Setup-Contact one.
-    group = ac.create_group("cmsend log")
-    invoke_main("-t", "LOG", "--join", group.get_qr_code())
+    if invite == "setup":
+        invitelink = ac.get_qr_code()
+        expected_name = ac.get_config("configured_addr")
+    else:
+        invitelink = ac.create_group("cmsend log").get_qr_code()
+        expected_name = "cmsend log"
 
-    _ret, out, _err = invoke_main("-l")
+    run_cmsend("-t", "LOG", "--join", invitelink)
+
+    out = run_cmsend("-l")
     assert "LOG" in out
-    assert "cmsend log" in out
+    assert expected_name in out
 
-    invoke_main("-t", "LOG", "-m", "hello from cmsend")
+    run_cmsend("-t", "LOG", "-m", "hello from cmsend")
     event = ac.wait_for_incoming_msg_event()
     snapshot = ac.get_message_by_id(event.msg_id).get_snapshot()
     assert snapshot.text == "hello from cmsend"

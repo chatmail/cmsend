@@ -124,7 +124,8 @@ class Profile:
             raise SystemExit(4)
 
         self._account.start_io()
-        self._account.secure_join(invitelink)
+        qr = self._account.check_qr(invitelink)
+        chat = self._account.secure_join(invitelink)
 
         def check_joined(event):
             if (
@@ -136,15 +137,20 @@ class Profile:
         ev = self.wait_for_event(check_joined)
         print(f"established contact with contact_id == {ev.contact_id}")
 
-        def me_was_added(event):
-            if event.kind == EventType.INCOMING_MSG:
-                msg = self._account.get_message_by_id(event.msg_id)
-                text = msg.get_snapshot().text
-                if text.startswith("Member Me added"):
-                    return True
+        if qr["kind"] == "askVerifyGroup":
+            # a group is only sendable once the inviter added us
+            def me_was_added(event):
+                if event.kind == EventType.INCOMING_MSG:
+                    msg = self._account.get_message_by_id(event.msg_id)
+                    text = msg.get_snapshot().text
+                    if text.startswith("Member Me added"):
+                        return True
 
-        ev_chat_id = self.wait_for_event(me_was_added)
-        chat_id = ev_chat_id.chat_id
+            chat_id = self.wait_for_event(me_was_added).chat_id
+        else:
+            # 1:1 chats get no such message and are ready right away
+            chat_id = chat.id
+
         print(f"joining completed with chat_id == {chat_id} tag={tag}")
         self._account.set_config(f"{self.UI_CONFIG_TAGGED_CHATS}.{tag}", str(chat_id))
         list_tags = self._account.get_config(self.UI_CONFIG_TAGGED_CHATS) or ""
