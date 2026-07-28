@@ -43,10 +43,13 @@ To show help:
 defines py-checks for this repository.
 Run checks locally with `uvx ruff check .` and `uvx ruff format --check .`
 
-To release, update CHANGELOG.md, then create and push a version tag:
+To release, run the shared release script from a checkout of
+[chatmail/workflows](https://github.com/chatmail/workflows):
 
-    git tag -a v0.5.0 -m "Release v0.5.0"
-    git push origin main v0.5.0
+    python ../workflows/scripts/make_new_release.py
 
-The release.yml workflow then builds and publishes to PyPI via
-trusted publishing (OIDC); no local twine or PyPI token is involved.
+It runs the checks, tests the built wheel, generates the CHANGELOG.md
+entry with git-cliff and opens it in your editor, then commits, tags
+vX.Y.Z and pushes. The release.yml workflow builds and publishes to
+PyPI via trusted publishing (OIDC); no local twine or PyPI token is
+involved.

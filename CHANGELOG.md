@@ -1,6 +1,3 @@
-
-# cmsend changelog
-
 ## unreleased
 
 - adopt shared CI from chatmail/workflows (ruff lint+format, build)
