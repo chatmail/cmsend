@@ -1,3 +1,5 @@
+# Standard workflow config of chatmail/workflow's py-checks flow.
+
 name: CI
 
 on:
@@ -15,6 +17,5 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # The tests create accounts on the ci-chatmail.testrun.org relay.
   py-checks:
     uses: chatmail/workflows/.github/workflows/py-checks.yml@main
