@@ -34,6 +34,14 @@ def main(argv=None):
         help="use the specified tag for joining a chat or sending a message (default: GENESIS)",
     )
     parser.add_argument(
+        "-n",
+        "--name",
+        type=str,
+        dest="name",
+        default=None,
+        help="set the account display name",
+    )
+    parser.add_argument(
         "-l", dest="listtags", action="store_true", help="list existing tagged chats"
     )
     parser.add_argument(
@@ -67,7 +75,12 @@ def perform_main(args):
 
         if args.relay:
             profile.perform_init(domain=args.relay)
-        elif args.invitelink:
+        if args.name:
+            profile.perform_setname(args.name)
+        if args.relay or args.name:
+            return
+
+        if args.invitelink:
             profile.perform_join(tag=args.tag, invitelink=args.invitelink)
         elif args.listtags:
             profile.perform_listtags()
@@ -117,6 +130,13 @@ class Profile:
         account.start_io()
         account.wait_for_event(EventType.IMAP_INBOX_IDLE)
         self.verbose1(f"profile {self!r} is configured and active now")
+
+    def perform_setname(self, name):
+        if self._account is None:
+            print("you must first call --init to setup a profile", file=sys.stderr)
+            raise SystemExit(4)
+        self._account.set_config("displayname", name)
+        self.verbose1(f"set display name to {name!r}")
 
     def perform_join(self, tag, invitelink):
         if self._account is None:

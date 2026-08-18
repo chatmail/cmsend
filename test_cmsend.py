@@ -54,3 +54,19 @@ def test_init_join_and_send(acfactory, run_cmsend, invite):
     event = ac.wait_for_incoming_msg_event()
     snapshot = ac.get_message_by_id(event.msg_id).get_snapshot()
     assert snapshot.text == "hello from cmsend"
+
+
+def test_name_reaches_recipient(acfactory, run_cmsend):
+    (ac,) = acfactory.get_online_accounts(1)
+
+    run_cmsend("--init", ci_chatmail_domain, timeout=120)
+    run_cmsend("--name", "CI Bot")
+
+    run_cmsend("-t", "LOG", "--join", ac.get_qr_code())
+    run_cmsend("-t", "LOG", "-m", "named hello")
+
+    event = ac.wait_for_incoming_msg_event()
+    snapshot = ac.get_message_by_id(event.msg_id).get_snapshot()
+    assert snapshot.text == "named hello"
+    sender = ac.get_contact_by_id(snapshot.from_id).get_snapshot()
+    assert sender.display_name == "CI Bot"
