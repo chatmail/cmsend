@@ -70,3 +70,25 @@ def test_name_reaches_recipient(acfactory, run_cmsend):
     assert snapshot.text == "named hello"
     sender = ac.get_contact_by_id(snapshot.from_id).get_snapshot()
     assert sender.display_name == "CI Bot"
+
+
+def test_send_reaches_member_added_while_offline(acfactory, run_cmsend):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+
+    run_cmsend("--init", ci_chatmail_domain, "--shared", timeout=120)
+    group = ac1.create_group("cmsend log")
+    invitelink = group.get_qr_code()
+    run_cmsend("-t", "LOG", "--join", invitelink)
+
+    ac2.secure_join(invitelink)
+    ac1.wait_for_securejoin_inviter_success()
+    ac2.wait_for_securejoin_joiner_success()
+
+    run_cmsend("-t", "LOG", "-m", "hello newcomer", timeout=180)
+
+    for _ in range(10):  # skip the "member added" info message
+        event = ac2.wait_for_incoming_msg_event()
+        snapshot = ac2.get_message_by_id(event.msg_id).get_snapshot()
+        if snapshot.text == "hello newcomer":
+            return
+    pytest.fail("the added member never received the message")

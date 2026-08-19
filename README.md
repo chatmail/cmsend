@@ -22,6 +22,11 @@ To list all chats with tags:
 
     cmsend -l
 
+To fetch (group memberships and keys) without sending anything, e.g., for
+cloned profiles, and to keep account alive on the relay:
+
+    cmsend --fetch-only
+
 To send a message to a tagged chat with an attachment:
 
     cmsend -t LOG -m "here is the file" -a README.md
