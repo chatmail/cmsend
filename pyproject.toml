@@ -8,9 +8,11 @@ readme = "README.md"
 description = "send end-to-end encrypted messages to chats on chatmail relays"
 requires-python = ">=3.11"
 dependencies = [
-  # core 2.38.0 removed "contacts" from FullChat, stay safely above it
-  "deltachat-rpc-server>=2.57.0",
-  "deltachat-rpc-client>=2.57.0",
+  # core 2.38.0 removed "contacts" from FullChat, stay safely above it.
+  # TEMPORARY: core >=2.59 sends a secure-join MIME filtermail relays reject,
+  # hanging --join (chatmail/core#8608, fixed on main but not yet released).
+  "deltachat-rpc-server==2.58.0",
+  "deltachat-rpc-client==2.58.0",
   "xdg-base-dirs>=6.0.2", 
 ]
 
