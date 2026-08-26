@@ -4,6 +4,7 @@ chatmail sendmail tool "cmsend" to send e2ee messages.
 
 import argparse
 import sys
+import threading
 import time
 
 from deltachat_rpc_client import DeltaChat, EventType, Rpc
@@ -34,7 +35,25 @@ def main(argv=None):
         help="use the specified tag for joining a chat or sending a message (default: GENESIS)",
     )
     parser.add_argument(
+        "-n",
+        "--name",
+        type=str,
+        dest="name",
+        default=None,
+        help="set the account display name",
+    )
+    parser.add_argument(
         "-l", dest="listtags", action="store_true", help="list existing tagged chats"
+    )
+    parser.add_argument(
+        "--fetch-only",
+        action="store_true",
+        help="only fetch pending messages, e.g., updated group info, and exit",
+    )
+    parser.add_argument(
+        "--shared",
+        action="store_true",
+        help="use with --init for cloned profiles to keep messages on relay and --fetch-only before send",
     )
     parser.add_argument(
         "-m",
@@ -66,11 +85,21 @@ def perform_main(args):
         profile = Profile(dc, verbosity=args.verbose)
 
         if args.relay:
-            profile.perform_init(domain=args.relay)
-        elif args.invitelink:
+            profile.perform_init(domain=args.relay, shared=args.shared)
+        if args.name:
+            profile.perform_setname(args.name)
+        if args.relay or args.name:
+            return
+
+        if args.invitelink:
             profile.perform_join(tag=args.tag, invitelink=args.invitelink)
         elif args.listtags:
             profile.perform_listtags()
+        elif args.fetch_only:
+            if not profile._account:
+                print("profile is not configured, run --init")
+                raise SystemExit(2)
+            profile.perform_fetch()
         else:
             if not profile._account:
                 print("profile is not configured, run --init")
@@ -107,16 +136,26 @@ class Profile:
         if self.verbosity >= 2:
             print(msg)
 
-    def perform_init(self, domain):
+    def perform_init(self, domain, shared=False):
         if self._account:
             print(f"profile {self!r} already exists", file=sys.stderr)
             raise SystemExit(3)
         print(f"# creating profile on {domain}")
         self._account = account = self.dc.add_account()
         account.set_config_from_qr(f"dcaccount:{domain}")
+        if shared:
+            account.set_config("bcc_self", "1")
+            account.set_config("delete_device_after", str(30 * 86400))
         account.start_io()
         account.wait_for_event(EventType.IMAP_INBOX_IDLE)
         self.verbose1(f"profile {self!r} is configured and active now")
+
+    def perform_setname(self, name):
+        if self._account is None:
+            print("you must first call --init to setup a profile", file=sys.stderr)
+            raise SystemExit(4)
+        self._account.set_config("displayname", name)
+        self.verbose1(f"set display name to {name!r}")
 
     def perform_join(self, tag, invitelink):
         if self._account is None:
@@ -167,8 +206,20 @@ class Profile:
             for contact in chat.get_contacts():
                 print(f"   - {contact.get_snapshot().name_and_addr}")
 
-    def perform_send(self, tag, text, filename=None):
-        self._account.start_io()
+    def perform_fetch(self):
+        self._account.bring_online()
+        self.verbose1("inbox is up to date")
+
+    def perform_send(self, tag, text, filename=None, sync_timeout=60):
+        if self._account.get_config("bcc_self") == "1":
+            # For shared accounts, try the blocking fetch in a thread to not risk delivery
+            fetcher = threading.Thread(target=self.perform_fetch, daemon=True)
+            fetcher.start()
+            fetcher.join(sync_timeout)
+            if fetcher.is_alive():
+                print(f"# inbox not synced after {sync_timeout}s, sending anyway")
+        else:
+            self._account.start_io()
 
         chat = self.get_tagged_chat(tag)
         snap = chat.get_full_snapshot()
