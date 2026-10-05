@@ -1,4 +1,13 @@
 
+## [0.6.0] - 2026-10-05
+
+### Fixes
+
+- update to core 2.62 and fix various small issues.
+
+- comment cleanup.
+
+
 ## [0.5.0] - 2026-07-28
 
 - use newer deltachat-rpc version (2.57).
