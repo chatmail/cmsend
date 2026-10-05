@@ -10,6 +10,9 @@ To send and receive from a single chatmail relay:
 
     cmsend --init nine.testrun.org   # <-- substitute with the domain you want to set as origin
 
+The profile's display name is `cmsend[HOSTNAME]`,
+so recipients see which host a message came from.
+
 To setup a tagged chat using an invite link:
 
     cmsend -t LOG --join "INVITELINK"       # <-- quotes are neccessary because links contain "&"

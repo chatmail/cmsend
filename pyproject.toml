@@ -8,9 +8,9 @@ readme = "README.md"
 description = "send end-to-end encrypted messages to chats on chatmail relays"
 requires-python = ">=3.11"
 dependencies = [
-  # core 2.38.0 removed "contacts" from FullChat, stay safely above it
-  "deltachat-rpc-server>=2.57.0",
-  "deltachat-rpc-client>=2.57.0",
+  # 2.62.0 renamed the "acfactory" test fixture to "acf"
+  "deltachat-rpc-server>=2.62.0",
+  "deltachat-rpc-client>=2.62.0",
   "xdg-base-dirs>=6.0.2", 
 ]
 
@@ -34,7 +34,6 @@ cmsend = "cmsend:main"
 test = [
   "pytest",
   "pytest-timeout",
-  "execnet", # imported by the deltachat_rpc_client pytest plugin
 ]
 
 [tool.pytest.ini_options]

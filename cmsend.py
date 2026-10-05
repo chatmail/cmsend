@@ -3,6 +3,7 @@ chatmail sendmail tool "cmsend" to send e2ee messages.
 """
 
 import argparse
+import socket
 import sys
 import time
 
@@ -67,15 +68,16 @@ def perform_main(args):
 
         if args.relay:
             profile.perform_init(domain=args.relay)
-        elif args.invitelink:
+            return
+        if not profile._account:
+            print("profile is not configured, run --init")
+            raise SystemExit(2)
+
+        if args.invitelink:
             profile.perform_join(tag=args.tag, invitelink=args.invitelink)
         elif args.listtags:
             profile.perform_listtags()
         else:
-            if not profile._account:
-                print("profile is not configured, run --init")
-                raise SystemExit(2)
-
             if args.msg is None:
                 args.msg = sys.stdin.read()
             profile.perform_send(text=args.msg, filename=args.filename, tag=args.tag)
@@ -89,14 +91,13 @@ class Profile:
         self.dc = dc
         self.verbosity = verbosity
         for account in self.dc.get_all_accounts():
-            addr = account.get_config("configured_addr")
-            if addr is not None:
+            if account.is_configured():
                 self._account = account
                 self.verbose1(f"profile {self!r} is active")
 
     def __repr__(self):
         if self._account:
-            return f"Profile<{self._account.get_config('configured_addr')}>"
+            return f"Profile<{self._account.self_contact.get_snapshot().address}>"
         return "Profile<unconfigured>"
 
     def verbose1(self, msg):
@@ -107,6 +108,13 @@ class Profile:
         if self.verbosity >= 2:
             print(msg)
 
+    def start_io(self):
+        # checked on every start, so a profile copied to another host follows it
+        displayname = f"cmsend[{socket.gethostname()}]"
+        if self._account.get_config("displayname") != displayname:
+            self._account.set_config("displayname", displayname)
+        self._account.start_io()
+
     def perform_init(self, domain):
         if self._account:
             print(f"profile {self!r} already exists", file=sys.stderr)
@@ -114,17 +122,12 @@ class Profile:
         print(f"# creating profile on {domain}")
         self._account = account = self.dc.add_account()
         account.set_config_from_qr(f"dcaccount:{domain}")
-        account.start_io()
+        self.start_io()
         account.wait_for_event(EventType.IMAP_INBOX_IDLE)
         self.verbose1(f"profile {self!r} is configured and active now")
 
     def perform_join(self, tag, invitelink):
-        if self._account is None:
-            print("you must first call --init to setup a profile", file=sys.stderr)
-            raise SystemExit(4)
-
-        self._account.start_io()
-        qr = self._account.check_qr(invitelink)
+        self.start_io()
         chat = self._account.secure_join(invitelink)
 
         def check_joined(event):
@@ -137,22 +140,17 @@ class Profile:
         ev = self.wait_for_event(check_joined)
         print(f"established contact with contact_id == {ev.contact_id}")
 
-        if qr["kind"] == "askVerifyGroup":
-            # a group is only sendable once the inviter added us
-            def me_was_added(event):
-                if event.kind == EventType.INCOMING_MSG:
-                    msg = self._account.get_message_by_id(event.msg_id)
-                    text = msg.get_snapshot().text
-                    if text.startswith("Member Me added"):
-                        return True
+        # for a group, progress 1000 arrives before "member added" is applied
+        if not chat.get_full_snapshot().can_send:
 
-            chat_id = self.wait_for_event(me_was_added).chat_id
-        else:
-            # 1:1 chats get no such message and are ready right away
-            chat_id = chat.id
+            def check_can_send(event):
+                if event.get("chat_id") == chat.id:
+                    return chat.get_full_snapshot().can_send
 
-        print(f"joining completed with chat_id == {chat_id} tag={tag}")
-        self._account.set_config(f"{self.UI_CONFIG_TAGGED_CHATS}.{tag}", str(chat_id))
+            self.wait_for_event(check_can_send)
+
+        print(f"joining completed with chat_id == {chat.id} tag={tag}")
+        self._account.set_config(f"{self.UI_CONFIG_TAGGED_CHATS}.{tag}", str(chat.id))
         list_tags = self._account.get_config(self.UI_CONFIG_TAGGED_CHATS) or ""
         tags = set(list_tags.split(","))
         tags.add(tag)
@@ -165,17 +163,24 @@ class Profile:
             snap = chat.get_full_snapshot()
             print(f"{tag}: chat_id={chat.id} name={snap.name}")
             for contact in chat.get_contacts():
-                print(f"   - {contact.get_snapshot().name_and_addr}")
+                contact_snap = contact.get_snapshot()
+                print(f"   - {contact_snap.display_name} <{contact_snap.address}>")
 
     def perform_send(self, tag, text, filename=None):
-        self._account.start_io()
+        self.start_io()
 
         chat = self.get_tagged_chat(tag)
         snap = chat.get_full_snapshot()
         if snap.is_encrypted and snap.can_send:
             msg = chat.send_message(text=text, file=filename)
             print(f"message {msg.id} was queued, waiting for delivery")
-            msg.wait_until_delivered()
+
+            def check_sent(event):
+                if event.kind in (EventType.MSG_DELIVERED, EventType.MSG_FAILED):
+                    return event.msg_id == msg.id
+
+            if self.wait_for_event(check_sent).kind == EventType.MSG_FAILED:
+                raise SystemExit(f"message {msg.id} failed: {msg.get_snapshot().error}")
             return 0
         raise SystemExit(5)
 
