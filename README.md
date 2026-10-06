@@ -15,7 +15,7 @@ so recipients see which host a message came from.
 
 To setup a tagged chat using an invite link:
 
-    cmsend -t LOG --join "INVITELINK"       # <-- quotes are neccessary because links contain "&"
+    cmsend -t LOG --join "INVITELINK"       # <-- quotes are necessary because links contain "&"
 
 To send a message to a tagged chat:
 
