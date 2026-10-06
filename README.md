@@ -6,6 +6,9 @@ To install use:
 
     uv tool install cmsend
 
+On platforms without a `deltachat-rpc-server` wheel, such as the BSDs,
+please build the server yourself from https://github.com/chatmail/core and put it on PATH.
+
 To send and receive from a single chatmail relay:
 
     cmsend --init nine.testrun.org   # <-- substitute with the domain you want to set as origin
@@ -28,6 +31,9 @@ To list all chats with tags:
 To send a message to a tagged chat with an attachment:
 
     cmsend -t LOG -m "here is the file" -a README.md
+
+Commands that use the network give up after 60 seconds
+and exit with an error, `--timeout` changes that limit.
 
 To show help:
 

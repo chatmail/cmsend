@@ -22,8 +22,12 @@ def run_cmsend(capfd, monkeypatch, tmp_path):
     return run
 
 
-def test_join_and_send(acf, run_cmsend):
+def test_join_and_send(acf, run_cmsend, capfd):
     (ac,) = acf.get_online_accounts(1)
+    # a timed-out --init must not leave a profile behind
+    with pytest.raises(subprocess.CalledProcessError):
+        run_cmsend("--timeout", "0", "--init", ci_chatmail_domain)
+    assert "timed out after 0s" in capfd.readouterr().err
     run_cmsend("--init", ci_chatmail_domain)
 
     run_cmsend("-t", "GROUP", "--join", ac.create_group("log").get_qr_code())
@@ -39,3 +43,9 @@ def test_join_and_send(acf, run_cmsend):
         assert snapshot.text == f"hello {tag}"
     sender = ac.get_contact_by_id(snapshot.from_id).get_snapshot()
     assert sender.display_name == f"cmsend[{socket.gethostname()}]"
+
+    ac.stop_io()
+    invitelink = ac.create_group("offline").get_qr_code()
+    with pytest.raises(subprocess.CalledProcessError):
+        run_cmsend("--timeout", "1", "-t", "OFFLINE", "--join", invitelink)
+    assert "timed out after 1s" in capfd.readouterr().err
