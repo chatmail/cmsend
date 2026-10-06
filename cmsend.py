@@ -3,11 +3,14 @@ chatmail sendmail tool "cmsend" to send e2ee messages.
 """
 
 import argparse
+import shutil
 import socket
 import sys
+import sysconfig
 import time
+from queue import Empty
 
-from deltachat_rpc_client import DeltaChat, EventType, JsonRpcError, Rpc
+from deltachat_rpc_client import AttrDict, DeltaChat, EventType, JsonRpcError, Rpc
 from xdg_base_dirs import xdg_config_home
 
 
@@ -50,21 +53,36 @@ def main(argv=None):
     parser.add_argument(
         "-a", dest="filename", type=str, default=None, help="add file attachment"
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=60,
+        help="give up on network operations after this many seconds (default: 60)",
+    )
     args = parser.parse_args(argv)
 
     try:
         return perform_main(args)
     except KeyboardInterrupt:
         raise SystemExit(2)
+    except TimeoutError:
+        raise SystemExit(f"cmsend timed out after {args.timeout:g}s")
 
 
 def perform_main(args):
     accounts_dir = xdg_config_home().joinpath("cmsend")
     if args.verbose >= 1:
         print(f"# using accounts_dir at: {accounts_dir}")
-    with Rpc(accounts_dir=accounts_dir) as rpc:
-        dc = DeltaChat(rpc)
-        profile = Profile(dc, verbosity=args.verbose)
+    # "uv tool install" puts only cmsend on PATH, not the server installed with it
+    server = shutil.which("deltachat-rpc-server", path=sysconfig.get_path("scripts"))
+    server = server or shutil.which("deltachat-rpc-server")
+    if not server:
+        raise SystemExit("deltachat-rpc-server not found, install it or put it on PATH")
+    if args.msg is None and not (args.relay or args.invitelink or args.listtags):
+        args.msg = sys.stdin.read()
+
+    with Rpc(accounts_dir=accounts_dir, rpc_server_path=server) as rpc:
+        profile = Profile(DeltaChat(rpc), verbosity=args.verbose, timeout=args.timeout)
 
         if args.relay:
             profile.perform_init(domain=args.relay)
@@ -78,18 +96,17 @@ def perform_main(args):
         elif args.listtags:
             profile.perform_listtags()
         else:
-            if args.msg is None:
-                args.msg = sys.stdin.read()
-            profile.perform_send(text=args.msg, filename=args.filename, tag=args.tag)
+            profile.perform_send(args.tag, args.msg, args.filename)
 
 
 class Profile:
     _account = None
     UI_CONFIG_TAGGED_CHATS = "ui.cmsend.tagged_chats"
 
-    def __init__(self, dc, verbosity=0):
+    def __init__(self, dc, verbosity=0, timeout=60):
         self.dc = dc
         self.verbosity = verbosity
+        self.deadline = time.monotonic() + timeout
         for account in self.dc.get_all_accounts():
             if account.is_configured():
                 self._account = account
@@ -123,11 +140,14 @@ class Profile:
         self._account = account = self.dc.add_account()
         try:
             account.set_config_from_qr(f"dcaccount:{domain}")
+            self.start_io()
+            self.wait_for_event(lambda event: event.kind == EventType.IMAP_INBOX_IDLE)
         except JsonRpcError as e:
             account.remove()
             raise SystemExit(f"could not create profile: {e.args[0]['message']}")
-        self.start_io()
-        account.wait_for_event(EventType.IMAP_INBOX_IDLE)
+        except TimeoutError:
+            account.remove()
+            raise
         self.verbose1(f"profile {self!r} is configured and active now")
 
     def perform_join(self, tag, invitelink):
@@ -210,11 +230,17 @@ class Profile:
 
     def wait_for_event(self, check_event):
         account = self._account
+        events = self.dc.rpc.get_queue(account.id)
         start_clock = time.time()
 
         log = self.verbose2
 
-        while event := account.wait_for_event():
+        while True:
+            remaining = max(0, self.deadline - time.monotonic())
+            try:
+                event = AttrDict(events.get(timeout=remaining))
+            except Empty:
+                raise TimeoutError
             if event.kind == EventType.INCOMING_MSG:
                 msg = account.get_message_by_id(event.msg_id)
                 text = msg.get_snapshot().text

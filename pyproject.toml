@@ -8,8 +8,9 @@ readme = "README.md"
 description = "send end-to-end encrypted messages to chats on chatmail relays"
 requires-python = ">=3.11"
 dependencies = [
-  # 2.62.0 renamed the "acfactory" test fixture to "acf"
-  "deltachat-rpc-server>=2.62.0",
+  # 2.62.0 renamed the "acfactory" test fixture to "acf";
+  # BSDs and others have no server wheel, cmsend then uses one from PATH
+  "deltachat-rpc-server>=2.62.0; sys_platform == 'linux' or sys_platform == 'darwin' or sys_platform == 'win32'",
   "deltachat-rpc-client>=2.62.0",
   "xdg-base-dirs>=6.0.2",
 ]
