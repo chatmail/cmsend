@@ -7,7 +7,7 @@ import socket
 import sys
 import time
 
-from deltachat_rpc_client import DeltaChat, EventType, Rpc
+from deltachat_rpc_client import DeltaChat, EventType, JsonRpcError, Rpc
 from xdg_base_dirs import xdg_config_home
 
 
@@ -70,7 +70,7 @@ def perform_main(args):
             profile.perform_init(domain=args.relay)
             return
         if not profile._account:
-            print("profile is not configured, run --init")
+            print("profile is not configured, run --init", file=sys.stderr)
             raise SystemExit(2)
 
         if args.invitelink:
@@ -121,16 +121,27 @@ class Profile:
             raise SystemExit(3)
         print(f"# creating profile on {domain}")
         self._account = account = self.dc.add_account()
-        account.set_config_from_qr(f"dcaccount:{domain}")
+        try:
+            account.set_config_from_qr(f"dcaccount:{domain}")
+        except JsonRpcError as e:
+            account.remove()
+            raise SystemExit(f"could not create profile: {e.args[0]['message']}")
         self.start_io()
         account.wait_for_event(EventType.IMAP_INBOX_IDLE)
         self.verbose1(f"profile {self!r} is configured and active now")
 
     def perform_join(self, tag, invitelink):
+        kind = self._account.check_qr(invitelink)["kind"]
+        if kind not in ("askVerifyContact", "askVerifyGroup"):
+            raise SystemExit(f"not a contact or group invite link: {kind}")
+
         self.start_io()
         chat = self._account.secure_join(invitelink)
 
         def check_joined(event):
+            if event.kind == EventType.MSG_FAILED:
+                msg = self._account.get_message_by_id(event.msg_id)
+                raise SystemExit(f"joining failed: {msg.get_snapshot().error}")
             if (
                 event.kind == EventType.SECUREJOIN_JOINER_PROGRESS
                 and event["progress"] == 1000
@@ -152,7 +163,7 @@ class Profile:
         print(f"joining completed with chat_id == {chat.id} tag={tag}")
         self._account.set_config(f"{self.UI_CONFIG_TAGGED_CHATS}.{tag}", str(chat.id))
         list_tags = self._account.get_config(self.UI_CONFIG_TAGGED_CHATS) or ""
-        tags = set(list_tags.split(","))
+        tags = set(filter(None, list_tags.split(",")))
         tags.add(tag)
         self._account.set_config(self.UI_CONFIG_TAGGED_CHATS, ",".join(tags))
 
@@ -182,6 +193,7 @@ class Profile:
             if self.wait_for_event(check_sent).kind == EventType.MSG_FAILED:
                 raise SystemExit(f"message {msg.id} failed: {msg.get_snapshot().error}")
             return 0
+        print(f"chat_id={chat.id} tag={tag} is not sendable", file=sys.stderr)
         raise SystemExit(5)
 
     def get_tagged_chat(self, tag):
@@ -189,13 +201,14 @@ class Profile:
         if not chat_id:
             print(
                 f"No chat tagged with tag={tag} found for sending on {self!r}, "
-                f"use -t {tag} --join 'https://i.delta.chat/...'"
+                f"use -t {tag} --join 'https://i.delta.chat/...'",
+                file=sys.stderr,
             )
             raise SystemExit(5)
 
         return self._account.get_chat_by_id(int(chat_id))
 
-    def wait_for_event(self, check_event=lambda ev: None):
+    def wait_for_event(self, check_event):
         account = self._account
         start_clock = time.time()
 
@@ -206,9 +219,9 @@ class Profile:
                 msg = account.get_message_by_id(event.msg_id)
                 text = msg.get_snapshot().text
                 log(f"!received historic message: {text}")
-            if event.kind == EventType.ERROR:
+            elif event.kind == EventType.ERROR:
                 log(f"ERROR: {event.msg}")
-            if event.kind == EventType.MSG_FAILED:
+            elif event.kind == EventType.MSG_FAILED:
                 msg = account.get_message_by_id(event.msg_id)
                 text = msg.get_snapshot().text
                 log(f"Message failed: {text}")
